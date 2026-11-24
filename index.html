@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Mini Production — Royal Ludo 3D</title>
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-512.png" />
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #090d16; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #f8fafc;
+    }
+    #game-wrap { position: relative; width: 100%; height: 100%; }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+    /* Splash Screen */
+    #splash {
+      position: fixed; inset: 0; z-index: 50;
+      background: radial-gradient(circle at center, #1e293b 0%, #090d16 80%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      transition: opacity 0.45s ease;
+    }
+    #splash.fade { opacity: 0; pointer-events: none; }
+    .splash-brand {
+      font-size: 28px; font-weight: 900; letter-spacing: 2.5px; text-transform: uppercase;
+      background: linear-gradient(135deg, #fef08a, #f59e0b);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    /* Top HUD */
+    #hud-top {
+      position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 12px; right: 12px;
+      display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+      pointer-events: none; z-index: 10;
+    }
+    .hud-pill {
+      background: rgba(9, 13, 22, 0.88); border: 1px solid rgba(250, 204, 21, 0.3);
+      padding: 7px 12px; border-radius: 10px; font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; gap: 10px; pointer-events: auto;
+      backdrop-filter: blur(6px);
+    }
+    .btn {
+      background: #1e293b; color: #fff; border: 1px solid rgba(255,255,255,0.2);
+      padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;
+    }
+    .btn.gold { background: linear-gradient(135deg, #f59e0b, #d97706); color: #0f172a; border-color: #fde047; font-weight: 800; }
+
+    /* Callout */
+    #callout {
+      position: absolute; top: 18%; left: 50%; transform: translate(-50%, -50%) scale(0.9);
+      background: rgba(9, 13, 22, 0.92); color: #fde047;
+      padding: 8px 18px; border-radius: 999px; font-size: 15px; font-weight: 900;
+      border: 2px solid #f59e0b; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s; z-index: 12;
+    }
+    #callout.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+    /* Bottom HUD */
+    #hud-bottom {
+      position: absolute; bottom: calc(16px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+      width: min(620px, calc(100vw - 24px));
+      background: rgba(9, 13, 22, 0.9); border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 14px; padding: 9px 14px; z-index: 10;
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      backdrop-filter: blur(6px);
+    }
+    .turn-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; flex-shrink: 0; }
+    #dice-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff;
+      border: 2px solid #93c5fd; padding: 8px 16px; border-radius: 10px;
+      font-size: 13px; font-weight: 800; cursor: pointer;
+    }
+    #dice-btn:disabled { opacity: 0.42; cursor: not-allowed; }
+    .dice-face {
+      width: 24px; height: 24px; background: #fff; color: #0f172a; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center; font-weight: 900;
+    }
+
+    /* Lobby Modal */
+    #modal {
+      position: fixed; inset: 0; background: rgba(9, 13, 22, 0.84);
+      display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 20;
+    }
+    #modal.hidden { display: none; }
+    .card {
+      background: #0f172a; border: 1px solid #334155; border-top: 4px solid #f59e0b;
+      border-radius: 14px; padding: 22px; max-width: 390px; width: 100%; text-align: center;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.75);
+    }
+    .card h1 { font-size: 21px; color: #fde047; margin-bottom: 6px; }
+    .card p { font-size: 12px; color: #94a3b8; line-height: 1.5; margin-bottom: 14px; }
+    .opt-group { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .opt-btn {
+      background: #1e293b; color: #e2e8f0; border: 1px solid #475569;
+      padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+    .opt-btn.selected { background: #f59e0b; color: #0f172a; border-color: #fde047; }
+  </style>
+</head>
+<body>
+  <div id="splash">
+    <div style="font-size:48px;margin-bottom:8px;">👑</div>
+    <div class="splash-brand">Mini Production</div>
+    <div style="font-size:12px;color:#94a3b8;letter-spacing:3px;margin-top:6px;">ROYAL LUDO 3D</div>
+  </div>
+
+  <div id="game-wrap">
+    <div id="hud-top">
+      <div class="hud-pill">
+        <span style="color:#fde047;">Coins: <span id="wallet-text">1000</span></span>
+        <button id="refill-btn" class="btn" type="button">+500</button>
+        <span style="color:#fcd34d;">Pot: <span id="pot-text">200</span></span>
+      </div>
+      <div class="hud-pill">
+        <button id="cam-btn" class="btn" type="button">Reset Cam</button>
+        <button id="lobby-btn" class="btn" type="button">Lobby</button>
+        <button id="mute-btn" class="btn" type="button">Audio: ON</button>
+      </div>
+    </div>
+
+    <div id="callout">CAPTURE!</div>
+
+    <div id="hud-bottom">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="turn-dot" class="turn-dot" style="background:#ef4444;"></div>
+        <div>
+          <div id="turn-label" style="font-size:13px;font-weight:800;">You (Red)</div>
+          <div id="status-msg" style="font-size:11px;color:#cbd5e1;">Drag to orbit 3D board &bull; Tap THROW</div>
+        </div>
+      </div>
+      <button id="dice-btn" type="button">
+        <div class="dice-face" id="dice-face">6</div>
+        <span>THROW 3D</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="modal">
+    <div class="card">
+      <h1 id="modal-title">Royal Ludo 3D</h1>
+      <p id="modal-desc">Full 3D marble-table Ludo with real-time shadows, 3D tumbling dice, and virtual coin stakes.</p>
+
+      <div style="font-size:11px;color:#cbd5e1;font-weight:700;margin-bottom:5px;">TABLE MODE</div>
+      <div class="opt-group" id="mode-group">
+        <button class="opt-btn selected" data-mode="2" type="button">1v1 (2x Pot)</button>
+        <button class="opt-btn" data-mode="4" type="button">4-Player (4x Pot)</button>
+      </div>
+
+      <div style="font-size:11px;color:#cbd5e1;font-weight:700;margin-bottom:5px;">STAKE (VIRTUAL COINS)</div>
+      <div class="opt-group" id="stake-group">
+        <button class="opt-btn" data-stake="50" type="button">50</button>
+        <button class="opt-btn selected" data-stake="100" type="button">100</button>
+        <button class="opt-btn" data-stake="250" type="button">250</button>
+        <button class="opt-btn" data-stake="500" type="button">500</button>
+      </div>
+
+      <button id="start-btn" class="btn gold" type="button" style="width:100%;padding:11px;font-size:14px;">Deposit Stake &amp; Play 3D</button>
+    </div>
+  </div>
+
+  <script>
+    const WALLET_KEY = "royal_ludo_3d_wallet";
+
+    // Audio
+    let audioCtx = null;
+    let isMuted = false;
+    function initAudio() {
+      if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }
+      if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    }
+    function playTone(freq, dur, endFreq, type = "triangle", vol = 0.11) {
+      if (isMuted) return;
+      initAudio();
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(endFreq || freq * 0.6, audioCtx.currentTime + dur);
+      gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + dur);
+    }
+
+    // Ludo Grid
+    const TRACK = [
+      [6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],[0,7],[0,8],
+      [1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],[7,14],[8,14],
+      [8,13],[8,12],[8,11],[8,10],[8,9],[9,8],[10,8],[11,8],[12,8],[13,8],[14,8],[14,7],[14,6],
+      [13,6],[12,6],[11,6],[10,6],[9,6],[8,5],[8,4],[8,3],[8,2],[8,1],[8,0],[7,0],[6,0]
+    ];
+    const SAFE_INDICES = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+    const PLAYERS_CFG = [
+      { id: 0, name: "You (Red)", hex: 0xef4444, css: "#ef4444", startIdx: 0, throwFrom: { x: -5.8, z: -5.8 }, homeCol: [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]], base: [[2,2],[2,3],[3,2],[3,3]] },
+      { id: 1, name: "Green Bot", hex: 0x22c55e, css: "#22c55e", startIdx: 13, throwFrom: { x: 5.8, z: -5.8 }, homeCol: [[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]], base: [[2,11],[2,12],[3,11],[3,12]] },
+      { id: 2, name: "Yellow Bot", hex: 0xeab308, css: "#eab308", startIdx: 26, throwFrom: { x: 5.8, z: 5.8 }, homeCol: [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]], base: [[11,11],[11,12],[12,11],[12,12]] },
+      { id: 3, name: "Blue Bot", hex: 0x3b82f6, css: "#3b82f6", startIdx: 39, throwFrom: { x: -5.8, z: 5.8 }, homeCol: [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]], base: [[11,2],[11,3],[12,2],[12,3]] }
+    ];
+
+    // State
+    let wallet = 1000, selectedMode = 2, selectedStake = 100, currentPot = 200;
+    let activePlayers = [], turnIdx = 0, phase = "menu", diceVal = 6, movableTokenIds = [];
+
+    // Three.js Globals
+    let scene, camera, renderer, raycaster, dice3D;
+    let camYaw = 0, camPitch = 0.88, camDist = 20;
+    const pawnMeshes = [];
+    const ringMeshes = [];
+    const sparks = [];
+
+    let calloutTimer = null;
+    function showCallout(text) {
+      const el = document.getElementById("callout");
+      el.textContent = text;
+      el.classList.add("show");
+      clearTimeout(calloutTimer);
+      calloutTimer = setTimeout(() => el.classList.remove("show"), 1300);
+    }
+
+    function gridToWorld(r, c) {
+      return { x: (c - 7) * 1.0, z: (r - 7) * 1.0 };
+    }
+
+    function getTokenCoord(pCfg, pos, tid) {
+      if (pos === -1) return pCfg.base[tid];
+      if (pos <= 50) return TRACK[(pCfg.startIdx + pos) % 52];
+      if (pos <= 56) return pCfg.homeCol[pos - 51];
+      return [7, 7];
+    }
+
+    function makeBoardTexture() {
+      const c = document.createElement("canvas");
+      c.width = 1024; c.height = 1024;
+      const ctx = c.getContext("2d");
+      const s = 1024 / 15;
+
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(0, 0, 1024, 1024);
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 2;
+      for (let i = 0; i <= 15; i++) {
+        ctx.beginPath(); ctx.moveTo(i * s, 0); ctx.lineTo(i * s, 1024); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i * s); ctx.lineTo(1024, i * s); ctx.stroke();
+      }
+
+      const drawBase = (r, col, color, spots) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(col * s, r * s, 6 * s, 6 * s);
+        ctx.fillStyle = "#fff";
+        ctx.fillRect((col + 0.9) * s, (r + 0.9) * s, 4.2 * s, 4.2 * s);
+        ctx.strokeStyle = color; ctx.lineWidth = 4;
+        for (const [sr, sc] of spots) {
+          ctx.beginPath(); ctx.arc((sc + 0.5) * s, (sr + 0.5) * s, s * 0.4, 0, Math.PI * 2); ctx.stroke();
+        }
+      };
+      drawBase(0, 0, "#ef4444", PLAYERS_CFG[0].base);
+      drawBase(0, 9, "#22c55e", PLAYERS_CFG[1].base);
+      drawBase(9, 9, "#eab308", PLAYERS_CFG[2].base);
+      drawBase(9, 0, "#3b82f6", PLAYERS_CFG[3].base);
+
+      for (const p of PLAYERS_CFG) {
+        ctx.fillStyle = p.css;
+        for (let i = 0; i < 5; i++) {
+          const [r, col] = p.homeCol[i];
+          ctx.fillRect(col * s + 2, r * s + 2, s - 4, s - 4);
+        }
+        const [sr, sc] = TRACK[p.startIdx];
+        ctx.fillRect(sc * s + 2, sr * s + 2, s - 4, s - 4);
+      }
+
+      ctx.fillStyle = "#475569";
+      ctx.font = `bold ${Math.round(s * 0.55)}px system-ui`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (const idx of SAFE_INDICES) {
+        const [r, col] = TRACK[idx];
+        ctx.fillText("★", (col + 0.5) * s, (r + 0.54) * s);
+      }
+
+      const cx = 512, cy = 512;
+      const tris = [
+        { p1: [6*s, 6*s], p2: [6*s, 9*s], color: "#ef4444" },
+        { p1: [6*s, 6*s], p2: [9*s, 6*s], color: "#22c55e" },
+        { p1: [9*s, 6*s], p2: [9*s, 9*s], color: "#eab308" },
+        { p1: [6*s, 9*s], p2: [9*s, 9*s], color: "#3b82f6" }
+      ];
+      for (const t of tris) {
+        ctx.fillStyle = t.color;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(t.p1[0], t.p1[1]); ctx.lineTo(t.p2[0], t.p2[1]);
+        ctx.closePath(); ctx.fill();
+      }
+      return new THREE.CanvasTexture(c);
+    }
+
+    function makeDiceFaceMat(num) {
+      const c = document.createElement("canvas");
+      c.width = 128; c.height = 128;
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 128, 128);
+      ctx.strokeStyle = "#f59e0b";
+      ctx.lineWidth = 6;
+      ctx.strokeRect(3, 3, 122, 122);
+      const d = 32, r = 11;
+      const pips = {
+        1: [[64,64]],
+        2: [[64-d,64-d],[64+d,64+d]],
+        3: [[64-d,64-d],[64,64],[64+d,64+d]],
+        4: [[64-d,64-d],[64+d,64-d],[64-d,64+d],[64+d,64+d]],
+        5: [[64-d,64-d],[64+d,64-d],[64,64],[64-d,64+d],[64+d,64+d]],
+        6: [[64-d,64-d],[64+d,64-d],[64-d,64],[64+d,64],[64-d,64+d],[64+d,64+d]]
+      }[num];
+      ctx.fillStyle = num === 1 ? "#dc2626" : "#0f172a";
+      for (const [px, py] of pips) {
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+      }
+      return new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(c), roughness: 0.25, metalness: 0.05 });
+    }
+
+    function create3DPawn(hex) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.22, metalness: 0.18 });
+      const gold = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.25, metalness: 0.7 });
+
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.14, 20), mat);
+      base.position.y = 0.07;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.028, 8, 20), gold);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.14;
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.25, 0.42, 20), mat);
+      body.position.y = 0.35;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.20, 20, 20), mat);
+      head.position.y = 0.64;
+
+      [base, ring, body, head].forEach((m) => { m.castShadow = true; g.add(m); });
+      return g;
+    }
+
+    function init3D() {
+      const wrap = document.getElementById("game-wrap");
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x090d16);
+      scene.fog = new THREE.Fog(0x090d16, 28, 65);
+
+      camera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.1, 100);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
+      wrap.insertBefore(renderer.domElement, wrap.firstChild);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.58));
+      const spot = new THREE.DirectionalLight(0xfffbeb, 1.0);
+      spot.position.set(8, 18, 10);
+      spot.castShadow = true;
+      spot.shadow.mapSize.width = 1024;
+      spot.shadow.mapSize.height = 1024;
+      spot.shadow.camera.left = -12; spot.shadow.camera.right = 12;
+      spot.shadow.camera.top = 12; spot.shadow.camera.bottom = -12;
+      scene.add(spot);
+
+      // Luxury Dark Marble Table
+      const table = new THREE.Mesh(
+        new THREE.CylinderGeometry(22, 22, 1, 48),
+        new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.4, metalness: 0.2 })
+      );
+      table.position.y = -0.85;
+      table.receiveShadow = true;
+      scene.add(table);
+
+      // Wooden & Gold Framed 3D Ludo Board
+      const frame = new THREE.Mesh(
+        new THREE.BoxGeometry(16.2, 0.5, 16.2),
+        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.45, metalness: 0.25 })
+      );
+      frame.position.y = -0.26;
+      frame.receiveShadow = true;
+      scene.add(frame);
+
+      const boardTop = new THREE.Mesh(
+        new THREE.BoxGeometry(15, 0.06, 15),
+        new THREE.MeshStandardMaterial({ map: makeBoardTexture(), roughness: 0.35 })
+      );
+      boardTop.position.y = 0;
+      boardTop.receiveShadow = true;
+      scene.add(boardTop);
+
+      // True 3D Dice
+      const diceMats = [1, 2, 3, 4, 5, 6].map((n) => makeDiceFaceMat(n));
+      dice3D = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.95, 0.95), diceMats);
+      dice3D.castShadow = true;
+      dice3D.position.set(0, 0.5, 0);
+      dice3D.visible = false;
+      scene.add(dice3D);
+
+      raycaster = new THREE.Raycaster();
+
+      window.addEventListener("resize", () => {
+        camera.aspect = wrap.clientWidth / wrap.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+      });
+    }
+
+    function loadWallet() {
+      try {
+        const v = parseInt(localStorage.getItem(WALLET_KEY), 10);
+        if (!isNaN(v) && v >= 0) wallet = v;
+      } catch (_) {}
+      updateWalletUI();
+    }
+    function saveWallet() {
+      try { localStorage.setItem(WALLET_KEY, String(wallet)); } catch (_) {}
+      updateWalletUI();
+    }
+    function updateWalletUI() {
+      document.getElementById("wallet-text").textContent = wallet;
+      document.getElementById("pot-text").textContent = currentPot;
+    }
+
+    function clearPawns() {
+      for (const m of pawnMeshes) scene.remove(m);
+      pawnMeshes.length = 0;
+      for (const r of ringMeshes) scene.remove(r);
+      ringMeshes.length = 0;
+    }
+
+    function startMatch() {
+      if (wallet < selectedStake) return;
+      wallet -= selectedStake;
+      currentPot = selectedStake * selectedMode;
+      saveWallet();
+
+      clearPawns();
+      const ids = selectedMode === 2 ? [0, 2] : [0, 1, 2, 3];
+      activePlayers = ids.map((id) => ({
+        ...PLAYERS_CFG[id],
+        isBot: id !== 0,
+        tokens: [0, 1, 2, 3].map((tid) => {
+          const mesh = create3DPawn(PLAYERS_CFG[id].hex);
+          const [r, c] = PLAYERS_CFG[id].base[tid];
+          const w = gridToWorld(r, c);
+          mesh.position.set(w.x, 0.03, w.z);
+          mesh.userData = { playerId: id, tokenId: tid };
+          scene.add(mesh);
+          pawnMeshes.push(mesh);
+
+          const ring = new THREE.Mesh(
+            new THREE.RingGeometry(0.38, 0.48, 24),
+            new THREE.MeshBasicMaterial({ color: 0xfde047, side: THREE.DoubleSide })
+          );
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.set(w.x, 0.05, w.z);
+          ring.visible = false;
+          scene.add(ring);
+          ringMeshes.push(ring);
+
+          return { id: tid, pos: -1, mesh, ring };
+        })
+      }));
+
+      turnIdx = 0; phase = "roll"; movableTokenIds = [];
+      document.getElementById("modal").classList.add("hidden");
+      setTurnUI();
+      document.getElementById("status-msg").textContent = "Your turn! Tap THROW 3D.";
+    }
+
+    function setTurnUI() {
+      const p = activePlayers[turnIdx];
+      document.getElementById("turn-dot").style.background = p.css;
+      document.getElementById("turn-label").textContent = p.name;
+      document.getElementById("dice-btn").disabled = p.isBot || phase !== "roll";
+      for (const r of ringMeshes) r.visible = false;
+      if (phase === "move" && !p.isBot) {
+        for (const tid of movableTokenIds) {
+          const tok = p.tokens[tid];
+          tok.ring.position.set(tok.mesh.position.x, 0.05, tok.mesh.position.z);
+          tok.ring.visible = true;
+        }
+      }
+    }
+
+    function getMovableTokens(pObj, roll) {
+      const res = [];
+      for (const t of pObj.tokens) {
+        if (t.pos === 56) continue;
+        if (t.pos === -1) { if (roll === 6) res.push(t.id); }
+        else if (t.pos + roll <= 56) res.push(t.id);
+      }
+      return res;
+    }
+
+    // Target rotations so each BoxGeometry face (1..6) lands facing UP (+Y)
+    const FACE_ROT = {
+      1: { x: 0, z: Math.PI / 2 },
+      2: { x: 0, z: -Math.PI / 2 },
+      3: { x: 0, z: 0 },
+      4: { x: Math.PI, z: 0 },
+      5: { x: -Math.PI / 2, z: 0 },
+      6: { x: Math.PI / 2, z: 0 }
+    };
+
+    function throwDice() {
+      if (phase !== "roll") return;
+      phase = "throwing";
+      document.getElementById("dice-btn").disabled = true;
+      diceVal = Math.floor(Math.random() * 6) + 1;
+      playTone(280, 0.08, 440, "square", 0.09);
+
+      dice3D.visible = true;
+      // Throw from the active player's own corner toward a random landing spot on the board
+      const origin = activePlayers[turnIdx].throwFrom;
+      const sx = origin.x + (Math.random() - 0.5) * 1.2;
+      const sz = origin.z + (Math.random() - 0.5) * 1.2;
+      const tx = (Math.random() - 0.5) * 9.6;
+      const tz = (Math.random() - 0.5) * 9.6;
+      dice3D.position.set(sx, 3.2 + Math.random() * 1.4, sz);
+
+      let vy = 0.18 + Math.random() * 0.12;
+      let vx = (tx - sx) / 14.5;
+      let vz = (tz - sz) / 14.5;
+      const spinX = 0.22 + Math.random() * 0.2;
+      const spinY = 0.18 + Math.random() * 0.2;
+      const spinZ = 0.20 + Math.random() * 0.2;
+      const landYaw = Math.random() * Math.PI * 2;
+      let frame = 0;
+
+      const step = () => {
+        frame++;
+        dice3D.position.x += vx;
+        dice3D.position.z += vz;
+        dice3D.position.y += vy;
+        vy -= 0.026;
+        vx *= 0.93; vz *= 0.93;
+        if (dice3D.position.y < 0.5) {
+          dice3D.position.y = 0.5;
+          vy = Math.abs(vy) * 0.48;
+          if (vy > 0.04) playTone(180, 0.04, 120, "triangle", 0.06);
+        }
+        if (frame < 24) {
+          dice3D.rotation.x += spinX;
+          dice3D.rotation.y += spinY;
+          dice3D.rotation.z += spinZ;
+          document.getElementById("dice-face").textContent = Math.floor(Math.random() * 6) + 1;
+          requestAnimationFrame(step);
+        } else {
+          const r = FACE_ROT[diceVal];
+          dice3D.rotation.set(r.x, landYaw, r.z);
+          dice3D.position.y = 0.5;
+          document.getElementById("dice-face").textContent = diceVal;
+          setTimeout(() => {
+            dice3D.visible = false;
+            onDiceLanded();
+          }, 300);
+        }
+      };
+      requestAnimationFrame(step);
+    }
+
+    function onDiceLanded() {
+      const p = activePlayers[turnIdx];
+      movableTokenIds = getMovableTokens(p, diceVal);
+      if (movableTokenIds.length === 0) {
+        document.getElementById("status-msg").textContent = `${p.name} rolled ${diceVal} — no moves.`;
+        setTimeout(nextTurn, 600);
+      } else if (p.isBot) {
+        const tid = pickBotToken(p, diceVal, movableTokenIds);
+        document.getElementById("status-msg").textContent = `${p.name} rolled ${diceVal}`;
+        setTimeout(() => executeMove(tid), 350);
+      } else if (movableTokenIds.length === 1) {
+        document.getElementById("status-msg").textContent = `Rolled ${diceVal}! Hopping...`;
+        setTimeout(() => executeMove(movableTokenIds[0]), 220);
+      } else {
+        phase = "move";
+        setTurnUI();
+        document.getElementById("status-msg").textContent = `Rolled ${diceVal}! Tap a glowing pawn.`;
+      }
+    }
+
+    function pickBotToken(bot, roll, cands) {
+      for (const tid of cands) {
+        const nextPos = bot.tokens[tid].pos === -1 ? 0 : bot.tokens[tid].pos + roll;
+        if (nextPos <= 50) {
+          const ti = (bot.startIdx + nextPos) % 52;
+          if (!SAFE_INDICES.has(ti)) {
+            for (const o of activePlayers) {
+              if (o.id === bot.id) continue;
+              for (const ot of o.tokens) {
+                if (ot.pos >= 0 && ot.pos <= 50 && (o.startIdx + ot.pos) % 52 === ti) return tid;
+              }
+            }
+          }
+        }
+      }
+      for (const tid of cands) if (bot.tokens[tid].pos === -1) return tid;
+      return cands.reduce((a, b) => (bot.tokens[a].pos > bot.tokens[b].pos ? a : b));
+    }
+
+    function spawn3DSparks(x, z, color) {
+      const geo = new THREE.SphereGeometry(0.09, 6, 6);
+      const mat = new THREE.MeshBasicMaterial({ color });
+      for (let i = 0; i < 16; i++) {
+        const m = new THREE.Mesh(geo, mat);
+        m.position.set(x, 0.5, z);
+        scene.add(m);
+        const a = (i / 16) * Math.PI * 2;
+        sparks.push({ m, vx: Math.cos(a) * 0.12, vy: 0.16 + Math.random() * 0.1, vz: Math.sin(a) * 0.12, life: 28 });
+      }
+    }
+
+    function executeMove(tokenId) {
+      const p = activePlayers[turnIdx];
+      const tok = p.tokens[tokenId];
+      phase = "hopping";
+      for (const r of ringMeshes) r.visible = false;
+
+      const startPos = tok.pos;
+      const steps = startPos === -1 ? [0] : Array.from({ length: diceVal }, (_, i) => startPos + i + 1);
+      let idx = 0;
+
+      const hopNext = () => {
+        if (idx >= steps.length) {
+          onMoveFinished(p, tok);
+          return;
+        }
+        const prevPos = idx === 0 ? startPos : steps[idx - 1];
+        const nextPos = steps[idx];
+        const [r1, c1] = getTokenCoord(p, prevPos, tok.id);
+        const [r2, c2] = getTokenCoord(p, nextPos, tok.id);
+        const w1 = gridToWorld(r1, c1), w2 = gridToWorld(r2, c2);
+        tok.pos = nextPos;
+        playTone(460 + idx * 45, 0.06, 620, "sine", 0.08);
+
+        let prog = 0;
+        const anim = () => {
+          prog += 0.2;
+          if (prog >= 1) {
+            tok.mesh.position.set(w2.x, 0.03, w2.z);
+            idx++;
+            hopNext();
+          } else {
+            tok.mesh.position.set(
+              w1.x + (w2.x - w1.x) * prog,
+              0.03 + Math.sin(prog * Math.PI) * 0.65,
+              w1.z + (w2.z - w1.z) * prog
+            );
+            requestAnimationFrame(anim);
+          }
+        };
+        requestAnimationFrame(anim);
+      };
+      hopNext();
+    }
+
+    function onMoveFinished(p, tok) {
+      let captured = false;
+      if (tok.pos <= 50) {
+        const ti = (p.startIdx + tok.pos) % 52;
+        if (!SAFE_INDICES.has(ti)) {
+          for (const o of activePlayers) {
+            if (o.id === p.id) continue;
+            for (const ot of o.tokens) {
+              if (ot.pos >= 0 && ot.pos <= 50 && (o.startIdx + ot.pos) % 52 === ti) {
+                ot.pos = -1;
+                const [br, bc] = o.base[ot.id];
+                const bw = gridToWorld(br, bc);
+                ot.mesh.position.set(bw.x, 0.03, bw.z);
+                captured = true;
+              }
+            }
+          }
+        }
+      }
+
+      if (captured) {
+        spawn3DSparks(tok.mesh.position.x, tok.mesh.position.z, 0xfde047);
+        playTone(180, 0.2, 85, "sawtooth", 0.14);
+        if (!p.isBot) {
+          const bonus = Math.round(selectedStake * 0.15);
+          wallet += bonus; saveWallet();
+          showCallout(`CAPTURED! +${bonus} BOUNTY!`);
+        } else {
+          showCallout(`${p.name} CAPTURED!`);
+        }
+      }
+
+      const reachedHome = tok.pos === 56;
+      if (reachedHome) {
+        spawn3DSparks(0, 0, p.hex);
+        showCallout(`${p.name} HOME!`);
+      }
+
+      if (p.tokens.every((t) => t.pos === 56)) {
+        phase = "over";
+        const won = !p.isBot;
+        if (won) { wallet += currentPot; saveWallet(); showCallout(`YOU WON +${currentPot}!`); }
+        document.getElementById("modal-title").textContent = won ? `YOU WON +${currentPot} COINS!` : `${p.name} Won`;
+        document.getElementById("modal-desc").textContent = `Wallet: ${wallet} Coins`;
+        setTimeout(() => document.getElementById("modal").classList.remove("hidden"), 900);
+        return;
+      }
+
+      if (diceVal === 6 || captured || reachedHome) {
+        phase = "roll";
+        setTurnUI();
+        if (p.isBot) setTimeout(throwDice, 580);
+        else document.getElementById("status-msg").textContent = "Bonus throw! Tap THROW 3D.";
+      } else {
+        setTimeout(nextTurn, 300);
+      }
+    }
+
+    function nextTurn() {
+      turnIdx = (turnIdx + 1) % activePlayers.length;
+      phase = "roll";
+      movableTokenIds = [];
+      setTurnUI();
+      const p = activePlayers[turnIdx];
+      if (p.isBot) {
+        document.getElementById("status-msg").textContent = `${p.name} is throwing...`;
+        setTimeout(throwDice, 550);
+      } else {
+        document.getElementById("status-msg").textContent = "Your turn! Tap THROW 3D.";
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      camera.position.set(
+        Math.sin(camYaw) * Math.cos(camPitch) * camDist,
+        Math.sin(camPitch) * camDist,
+        Math.cos(camYaw) * Math.cos(camPitch) * camDist
+      );
+      camera.lookAt(0, 0, 0);
+
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i];
+        s.m.position.x += s.vx; s.m.position.y += s.vy; s.m.position.z += s.vz;
+        s.vy -= 0.01; s.life--;
+        if (s.life <= 0) { scene.remove(s.m); sparks.splice(i, 1); }
+      }
+      renderer.render(scene, camera);
+    }
+
+    window.onload = () => {
+      setTimeout(() => {
+        const sp = document.getElementById("splash");
+        sp.classList.add("fade");
+        setTimeout(() => sp.remove(), 500);
+      }, 1400);
+
+      loadWallet();
+      init3D();
+
+      // Orbit drag + Tap pawn selection
+      let dragging = false, lx = 0, ly = 0, distMoved = 0;
+      const dom = renderer.domElement;
+      const startDrag = (x, y) => { dragging = true; lx = x; ly = y; distMoved = 0; };
+      const moveDrag = (x, y) => {
+        if (!dragging) return;
+        const dx = x - lx, dy = y - ly;
+        distMoved += Math.abs(dx) + Math.abs(dy);
+        lx = x; ly = y;
+        camYaw -= dx * 0.008;
+        camPitch = Math.max(0.45, Math.min(1.45, camPitch + dy * 0.006));
+      };
+      const endDrag = (x, y) => {
+        if (dragging && distMoved < 10 && phase === "move") {
+          const rect = dom.getBoundingClientRect();
+          const ndc = new THREE.Vector2(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1);
+          raycaster.setFromCamera(ndc, camera);
+          const p = activePlayers[turnIdx];
+          const hits = raycaster.intersectObjects(p.tokens.map((t) => t.mesh), true);
+          if (hits.length > 0) {
+            let obj = hits[0].object;
+            while (obj && obj.userData.tokenId === undefined) obj = obj.parent;
+            if (obj && movableTokenIds.includes(obj.userData.tokenId)) {
+              executeMove(obj.userData.tokenId);
+            }
+          }
+        }
+        dragging = false;
+      };
+
+      dom.addEventListener("mousedown", (e) => startDrag(e.clientX, e.clientY));
+      window.addEventListener("mousemove", (e) => moveDrag(e.clientX, e.clientY));
+      window.addEventListener("mouseup", (e) => endDrag(e.clientX, e.clientY));
+      dom.addEventListener("touchstart", (e) => { if (e.touches[0]) startDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+      dom.addEventListener("touchmove", (e) => { if (e.touches[0]) moveDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+      dom.addEventListener("touchend", (e) => { if (e.changedTouches[0]) endDrag(e.changedTouches[0].clientX, e.changedTouches[0].clientY); }, { passive: true });
+
+      document.querySelectorAll("#mode-group .opt-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          document.querySelectorAll("#mode-group .opt-btn").forEach((x) => x.classList.remove("selected"));
+          b.classList.add("selected"); selectedMode = parseInt(b.dataset.mode, 10);
+        });
+      });
+      document.querySelectorAll("#stake-group .opt-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          document.querySelectorAll("#stake-group .opt-btn").forEach((x) => x.classList.remove("selected"));
+          b.classList.add("selected"); selectedStake = parseInt(b.dataset.stake, 10);
+        });
+      });
+
+      document.getElementById("start-btn").addEventListener("click", () => { initAudio(); startMatch(); });
+      document.getElementById("lobby-btn").addEventListener("click", () => document.getElementById("modal").classList.remove("hidden"));
+      document.getElementById("refill-btn").addEventListener("click", () => { wallet += 500; saveWallet(); });
+      document.getElementById("cam-btn").addEventListener("click", () => { camYaw = 0; camPitch = 0.88; });
+      document.getElementById("dice-btn").addEventListener("click", () => { initAudio(); throwDice(); });
+      document.getElementById("mute-btn").addEventListener("click", (e) => {
+        isMuted = !isMuted;
+        e.target.textContent = isMuted ? "Audio: OFF" : "Audio: ON";
+      });
+
+      requestAnimationFrame(animate);
+    };
+  </script>
+</body>
+</html>
